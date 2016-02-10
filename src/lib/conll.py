@@ -52,6 +52,52 @@ class DependencyTree(nx.DiGraph):
                 return u
         return None
 
+
+    def sentence_plus_word(self,n, attr_dict={},head=None,edge_attribs={}):
+        #n is the insertion point right before the new word
+        #the new node can either be disconnected if head==None, or a leaf, if head is specified
+        "the sequence of nodes mmmmnppp becomes mmmnOppp"
+        newsent = DependencyTree()
+        newsent.add_node(0,attr_dict={'form' :'ROOT', 'lemma' :'ROOT', 'cpostag' :'ROOT', 'postag' : 'ROOT'})
+        for k in self.graph.keys():
+            newsent.graph[k]=self.graph[k]
+
+
+        #the starting nodes mmm and insertion point n
+        for j in self.nodes()[1:n+1]:
+            newsent.add_node(j,attr_dict=self.node[j])
+
+            original_head = self.head_of(j)
+            adjusted_head = self.head_of(j)
+            if adjusted_head > n: #TODO There might a boundary case if the original head is *the* insertion point
+                adjusted_head +=1
+            newsent.add_edge(adjusted_head,j,attr_dict=self[original_head][j])
+
+        #the new O node,
+        newsent.add_node(n+1,attr_dict=attr_dict)
+        if head:
+            if head > n:
+                adjusted_head = head + 1
+            else:
+                adjusted_head = head
+            newsent.add_edge(adjusted_head,n+1,attr_dict=edge_attribs)
+
+        #the trailing pppp nodes
+        for j in self.nodes()[n+1:]:
+            adjusted_node = j + 1
+            original_head = self.head_of(j)
+
+            if original_head > n:
+                adjusted_head = original_head + 1
+            else:
+                adjusted_head = original_head
+
+            newsent.add_node(adjusted_node,attr_dict=self.node[j])
+            newsent.add_edge(adjusted_head,adjusted_node,attr_dict=self[original_head][j])
+
+        return newsent
+
+
     def sentence_minus_word(self,n,propagate_edges=False): #notice we are not using remove_node because we need to recalculate node indices and so on
         # deleting a word implies
         # a word is not a node, i.e. its index is >0
@@ -63,6 +109,8 @@ class DependencyTree(nx.DiGraph):
             return self
 
         newsent = DependencyTree()
+        for k in self.graph.keys():
+            newsent.graph[k]=self.graph[k]
 
         head_of_deleted_word = self.head_of(n)
 
@@ -344,8 +392,11 @@ class CoNLLReader(object):
                     head_i = sent.head_of(token_i)
                     token_dict['head'] = head_i
                     # print(head_i, token_i)
-                    token_dict['deprel'] = sent[head_i][token_i]['deprel']
-                    token_dict['id'] = token_i
+                    try:
+                        token_dict['deprel'] = sent[head_i][token_i]['deprel']
+                        token_dict['id'] = token_i
+                    except:
+                        print("error at",head_i,token_i,token_dict)
                     row = [str(token_dict.get(col, '_')) for col in columns]
                     if print_fused_forms and token_i in sent.graph["multi_tokens"]:
                        currentmulti = sent.graph["multi_tokens"][token_i]
