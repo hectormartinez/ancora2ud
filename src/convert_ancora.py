@@ -134,18 +134,18 @@ def split_adpdet_contractions(sent):
         print(newsent.graph.keys())
     return newsent
 
-def split_functional_mwe(sent):
+def split_underscored_token(sent):
     newsent = copy.copy(sent)
+
     return newsent
 
 
 def apply_transform(sent):
-    #newsent = copy.copy(sent)
+    newsent = copy.copy(sent)
     newsent = remove_elliptic_subjects(sent)
     #newsent = remove_longpos(newsent)
-    newsent = copy.copy(sent)
     newsent = copy.copy(split_adpdet_contractions(newsent))
-    #newsent = split_functional_mwe(newsent)
+    #newsent = split_underscored_token(newsent)
     return newsent
 
 
@@ -168,7 +168,7 @@ def main():
         #if not 'multi_tokens' in s.graph.keys():
         #    print(s.get_sentence_as_string())
         modif_treebank.append(s)
-    cio.write_conll(modif_treebank,args.output,conllformat='conllu', print_fused_forms=True,print_comments=False)
+    cio.write_conll(modif_treebank,args.output,conllformat='conllu', print_fused_forms=True,print_comments=True)
 
 if __name__ == "__main__":
     main()
