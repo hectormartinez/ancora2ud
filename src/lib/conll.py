@@ -1,6 +1,6 @@
 import networkx as nx
 from collections import Counter
-import re
+import re, copy
 
 
 #TODO make these parse functions static methods of ConllReder
@@ -86,6 +86,12 @@ class DependencyTree(nx.DiGraph):
         for j in self.nodes()[n+1:]:
             adjusted_node = j + 1
             original_head = self.head_of(j)
+
+            if j in self.graph["multi_tokens"]:
+                multiwordvalues = copy.copy(self.graph["multi_tokens"][j])
+                multiwordvalues["id"] = multiwordvalues["id"][0]+1,multiwordvalues["id"][1]+1
+                del self.graph["multi_tokens"][j]
+                self.graph["multi_tokens"][adjusted_node] = multiwordvalues
 
             if original_head > n:
                 adjusted_head = original_head + 1
@@ -406,7 +412,7 @@ class CoNLLReader(object):
                        rowmulti = [str(currentmulti.get(col, '_')) for col in columns]
                        print(u"\t".join(rowmulti),file=out)
                     print(u"\t".join(row), file=out)
-            print(u"\t".join(row),file=out)
+            #print(u"\t".join(row),file=out)
             # emtpy line afterwards
             print(u"", file=out)
 
