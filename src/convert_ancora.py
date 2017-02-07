@@ -16,6 +16,7 @@ doublecliticverbs = dict([(x,y.split()) for x,y in zip(doublecliticverbs_fused,d
 twocharclitics = "me te le la lo se".split(" ") # "os" generates too many false positives
 threecharclitics = "nos les los las".split(" ")
 doublecaseclitics = "le les nos os se te me".split(" ")
+spaceafterno = "SpaceAfter=No"
 
 cliticlemmas = {"me": "yo", "te": "tú", "la":"él", "las":"él","los":"él","lo":"él","nos":"yo","se":"él","le":"él","les":"él", "os":"tú"}
 
@@ -65,7 +66,58 @@ def remove_elliptic_subjects(sent):
 
 def insert_text_metafield(sent):
     #TODO calculate new text according to the separator sign
-    text = ""
+    #for each position, check whether there is a SpaceAfter=No, and add a space accordingling
+
+    wordarray=[]
+    spacearray=[]
+
+    #reconstruct space array
+    for n in sorted(sent.nodes())[1:-1]:
+        if 'misc' in sent.node[n].keys() and spaceafterno in sent.node[n]['misc']:
+            spacearray.append("")
+        else:
+            spacearray.append(" ")
+    spacearray.append("")
+
+    printmaskarray=[True]*len(spacearray)
+
+    visited = set()
+
+    for n in range(1,len(spacearray)+1):
+        if n in sent.graph['multi_tokens']:
+            print(sent.graph['multi_tokens'][n])
+            mwe_begin,mwe_end=sent.graph['multi_tokens'][n]["id"]
+            wordarray.append(sent.graph['multi_tokens'][n]["form"])
+            for x in range(mwe_begin,mwe_end):
+                print(x,"inside multiword")
+                printmaskarray[x]=False
+                if x != mwe_begin:
+                    visited.add(x)
+                    wordarray.append(sent.node[x]['form'])
+
+            if 'misc' in sent.node[mwe_end].keys() and spaceafterno in sent.node[mwe_end]['misc']:
+                    sent.node[mwe_end]['misc'] = "_"
+                    sent.graph['multi_tokens'][n]["misc"]=spaceafterno
+                    spacearray[mwe_begin-1]=""
+        else:
+            if n not in visited:
+                if sent.node[n]["form"]:
+                    wordarray.append(sent.node[n]["form"])
+                    visited.add(n)
+                else:
+                    wordarray.append(" ")
+                    visited.add(n)
+
+    text=''
+    for bitmask,form,space in zip(printmaskarray,wordarray,spacearray):
+        if bitmask:
+            text+=form+space
+    for n in range(len(sent.graph["comment"])):
+        if sent.graph["comment"][n].startswith("# text"):
+            sent.graph["comment"][n]="# text = "+text.strip()
+
+    print(len(printmaskarray),len(spacearray),len(wordarray))
+    print(wordarray)
     return sent
 
 
@@ -294,6 +346,8 @@ def process_mwe_verbs(sent):
     return newsent
 
 
+
+
 def apply_transform(sent,lang):
     newsent = copy.copy(sent)
     newsent = copy.copy(split_adpdet_contractions(newsent))
@@ -302,14 +356,17 @@ def apply_transform(sent,lang):
     else:
         newsent = copy.copy(insert_multitoken_verbs_ca(newsent))
 
+    newsent = insert_text_metafield(newsent)
 
     return newsent
+
+
 
 
 def main():
     parser = argparse.ArgumentParser(description="""Convert conllu to conll format""")
     #parser.add_argument('--input', help="conllu file", default='../..//UD_Spanish-AnCora/es_ancora-all.conllu')
-    parser.add_argument('--input', help="conllu file", default='/Users/hector/proj/ancora2ud/data/v2/UD_Catalan/ca-ud-dev.conllu')
+    parser.add_argument('--input', help="conllu file", default='/Users/hmartine/tmp/UD_Catalan/ca-ud-train.conllu')
     parser.add_argument('--output', help="target file", type=Path,default="catout.conllu")
     parser.add_argument('--lang', help="specify a language 2-letter code", default="default")
     args = parser.parse_args()
