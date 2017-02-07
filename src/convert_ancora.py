@@ -36,7 +36,7 @@ catalanverbclitic_forms = "'hi 'ho 'l 'ls 'm 'n 'ns 's -hi -ho -l -la -les -li -
 
 """
 cliticfeatures={}
-cliticfeatures["la"]= "Number=Sing|Person=2|PronType=Prs"
+cliticfeatures["la"]= "Case=Acc|Gender=Fem|Number=Sing|Person=3|PronType=Prs"
 cliticfeatures["las"]= "Case=Acc|Gender=Fem|Number=Plur|Person=3|PronType=Prs"
 cliticfeatures["lo"]= "Case=Acc|Gender=Masc|Number=Sing|Person=3|PronType=Prs"
 cliticfeatures["los"]= "Case=Acc|Gender=Masc|Number=Plur|Person=3|PronType=Prs"
@@ -61,6 +61,12 @@ def remove_elliptic_subjects(sent):
     elliptic_subjects=[i for i in newsent.nodes() if newsent.node[i]['form'] == '_' and newsent[newsent.head_of(i)][i]['deprel']=='nsubj']
 
   return newsent
+
+
+def insert_text_metafield(sent):
+    #TODO calculate new text according to the separator sign
+    text = ""
+    return sent
 
 
 def verb_has_object(sent,verbindex):
@@ -204,6 +210,8 @@ def split_adpdet_contractions(sent):
 
 
 def insert_multitoken_verbs_ca(sent):
+    #TODO If multiword, then we might want to add the nospace feature
+    #TODO As well as removing the hyphens from the clitics
     newsent = copy.copy(sent)
     verbs_with_possible_clitic = [i for i in newsent.nodes()[1:] if ("Mood=Imp" in newsent.node[i]['feats'] or "VerbForm=Ger" in newsent.node[i]['feats'] or "VerbForm=Inf" in newsent.node[i]['feats']) and (newsent.node[i]['cpostag'] == "VERB" or newsent.node[i]['cpostag'] == "AUX") and newsent.node[i+1]['form'].lower() in catalanverbclitic_forms]
     for vindex in verbs_with_possible_clitic:
@@ -301,7 +309,7 @@ def apply_transform(sent,lang):
 def main():
     parser = argparse.ArgumentParser(description="""Convert conllu to conll format""")
     #parser.add_argument('--input', help="conllu file", default='../..//UD_Spanish-AnCora/es_ancora-all.conllu')
-    parser.add_argument('--input', help="conllu file", default='../..//UD_Catalan/ca-all.conllu')
+    parser.add_argument('--input', help="conllu file", default='/Users/hector/proj/ancora2ud/data/v2/UD_Catalan/ca-ud-dev.conllu')
     parser.add_argument('--output', help="target file", type=Path,default="catout.conllu")
     parser.add_argument('--lang', help="specify a language 2-letter code", default="default")
     args = parser.parse_args()

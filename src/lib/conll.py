@@ -52,6 +52,29 @@ class DependencyTree(nx.DiGraph):
                 return u
         return None
 
+    def is_fully_projective(self):
+        countProjectiveRelation=0
+        countNonProjectiveRelation=0
+        punctNonProj=0
+
+        for i,j in self.edges():
+            #i = instance[edge]
+            #j = edge
+
+            if j < i:
+                i,j=j,i
+            for k in range(i+1,j):
+                headk = self.head_of(k)
+                if i <= headk <= j or j <= headk <= i:
+                    projEdge = True
+                    countProjectiveRelation+=1
+                else:
+                    #print("non-projective")
+                    #print("{} <= {} <= {} ? ".format(i,headk,j))
+                    isProjective=False
+                    countNonProjectiveRelation+=1
+        return countNonProjectiveRelation == 0
+
 
     def sentence_plus_word(self,n, attr_dict={},head=None,edge_attribs={}):
         #n is the insertion point right before the new word
