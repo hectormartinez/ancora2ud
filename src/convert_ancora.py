@@ -65,7 +65,6 @@ def remove_elliptic_subjects(sent):
 
 
 def insert_text_metafield(sent):
-    #TODO calculate new text according to the separator sign
     #for each position, check whether there is a SpaceAfter=No, and add a space accordingling
 
     wordarray=[]
@@ -85,11 +84,9 @@ def insert_text_metafield(sent):
 
     for n in range(1,len(spacearray)+1):
         if n in sent.graph['multi_tokens']:
-            print(sent.graph['multi_tokens'][n])
             mwe_begin,mwe_end=sent.graph['multi_tokens'][n]["id"]
             wordarray.append(sent.graph['multi_tokens'][n]["form"])
             for x in range(mwe_begin,mwe_end):
-                print(x,"inside multiword")
                 printmaskarray[x]=False
                 if x != mwe_begin:
                     visited.add(x)
@@ -116,8 +113,6 @@ def insert_text_metafield(sent):
         if sent.graph["comment"][n].startswith("# text"):
             sent.graph["comment"][n]="# text = "+text.strip()
 
-    print(len(printmaskarray),len(spacearray),len(wordarray))
-    print(wordarray)
     return sent
 
 
@@ -129,7 +124,7 @@ def verb_has_object(sent,verbindex):
 
 def adp_introduces_mwe(sent,adpositionindex):
     for h,d in sent.edges():
-        if h == adpositionindex and sent[h][d]["deprel"] == "mwe":
+        if h == adpositionindex and sent[h][d]["deprel"] == "fixed":
             return True
     return False
 
@@ -182,7 +177,7 @@ def add_mwe_to_tree(sent,mwe_id,mw_form,mw_lemma,mw_cpos):
                     if newvalues['cpos'] == "X":
                         newdeprel="foreign"
                     else:
-                        newdeprel="mwe"
+                        newdeprel="fixed"
                     newsent.add_edge(mwe_first,new_id,deprel=newdeprel)
         else:
             if node_id < mwe_id:
@@ -227,14 +222,14 @@ def split_adpdet_contractions(sent):
         contracted_prep = newsent.node[current_contraction_index]["form"]
         if adp_introduces_mwe(newsent,current_contraction_index):
             newsent.graph['multi_tokens'][current_contraction_index]={'id':[current_contraction_index,current_contraction_index+1],'form':newsent.node[current_contraction_index]['form']}
-            newsent = copy.copy(newsent.sentence_plus_word(current_contraction_index,{'form':'***','cpostag':'***', 'lemma':'***','feats':"_"},current_contraction_index,{'deprel':'mwe'}))
+            newsent = copy.copy(newsent.sentence_plus_word(current_contraction_index,{'form':'***','cpostag':'***', 'lemma':'***','feats':"_"},current_contraction_index,{'deprel':'fixed'}))
 
         else:
             newsent.graph['multi_tokens'][current_contraction_index]={'id':[current_contraction_index,current_contraction_index+1],'form':newsent.node[current_contraction_index]['form']}
 
             label = "det"
             if adp_introduces_mwe(newsent,newsent.head_of(current_contraction_index)): #if within a MWE index
-                label = "mwe"
+                label = "fixed"
             newsent = copy.copy(newsent.sentence_plus_word(current_contraction_index,{'form':'***','cpostag':'***', 'lemma':'***','feats':"_"},newsent.head_of(current_contraction_index),{'deprel':label}))
 
         newsent.node[current_contraction_index]['form']=contraction_prep[newsent.node[current_contraction_index]['lemma']]
@@ -262,8 +257,6 @@ def split_adpdet_contractions(sent):
 
 
 def insert_multitoken_verbs_ca(sent):
-    #TODO If multiword, then we might want to add the nospace feature
-    #TODO As well as removing the hyphens from the clitics
     newsent = copy.copy(sent)
     verbs_with_possible_clitic = [i for i in newsent.nodes()[1:] if ("Mood=Imp" in newsent.node[i]['feats'] or "VerbForm=Ger" in newsent.node[i]['feats'] or "VerbForm=Inf" in newsent.node[i]['feats']) and (newsent.node[i]['cpostag'] == "VERB" or newsent.node[i]['cpostag'] == "AUX") and newsent.node[i+1]['form'].lower() in catalanverbclitic_forms]
     for vindex in verbs_with_possible_clitic:
@@ -347,8 +340,37 @@ def process_mwe_verbs(sent):
 
 
 
+def normalize_clitics_ca(sent):
+
+    apostropheform = {}
+    apostropheform["'hi"] = "hi"
+    apostropheform["'n"] = "ne"
+    apostropheform["'ns"] = "nos"
+    apostropheform["'ho"] = "ho"
+    apostropheform["'ls"] = "els"
+    apostropheform["'s"] = "se"
+    apostropheform["'l"] = "el"
+    apostropheform["'m"] = "me"
+
+
+    tokens_in_mwe = set()
+    for n in sent.graph['multi_tokens'] :
+        begin_mwe, end_mwe = sent.graph['multi_tokens'][n]["id"]
+        for v in range(begin_mwe,end_mwe+1):
+            tokens_in_mwe.add(v)
+
+    for n in sent.nodes()[1:]:
+        if sent.node[n]["cpostag"]=="PRON" and n in tokens_in_mwe:
+            if sent.node[n]["form"].startswith("-"):
+                sent.node[n]["form"]=sent.node[n]["form"][1:]
+            else:
+                sent.node[n]["form"]=apostropheform[sent.node[n]["form"]]
+
+    return sent
+
 
 def apply_transform(sent,lang):
+
     newsent = copy.copy(sent)
     newsent = copy.copy(split_adpdet_contractions(newsent))
     if lang == "es":
@@ -358,6 +380,9 @@ def apply_transform(sent,lang):
 
     newsent = insert_text_metafield(newsent)
 
+    if lang == "ca":
+        newsent = normalize_clitics_ca(newsent)
+
     return newsent
 
 
@@ -366,9 +391,9 @@ def apply_transform(sent,lang):
 def main():
     parser = argparse.ArgumentParser(description="""Convert conllu to conll format""")
     #parser.add_argument('--input', help="conllu file", default='../..//UD_Spanish-AnCora/es_ancora-all.conllu')
-    parser.add_argument('--input', help="conllu file", default='/Users/hmartine/tmp/UD_Catalan/ca-ud-train.conllu')
+    parser.add_argument('--input', help="conllu file", default='../data/v2/UD_Catalan/ca-ud-dev.conllu')
     parser.add_argument('--output', help="target file", type=Path,default="catout.conllu")
-    parser.add_argument('--lang', help="specify a language 2-letter code", default="default")
+    parser.add_argument('--lang', help="specify a language 2-letter code", default="ca")
     args = parser.parse_args()
 
     if sys.version_info < (3,0):
