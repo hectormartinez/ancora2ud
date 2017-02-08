@@ -92,9 +92,12 @@ class DependencyTree(nx.DiGraph):
 
             original_head = self.head_of(j)
             adjusted_head = self.head_of(j)
-            if adjusted_head > n: #TODO There might a boundary case if the original head is *the* insertion point
-                adjusted_head +=1
-            newsent.add_edge(adjusted_head,j,attr_dict=self[original_head][j])
+            try:
+                if adjusted_head > n: #TODO There might a boundary case if the original head is *the* insertion point
+                    adjusted_head +=1
+                newsent.add_edge(adjusted_head,j,attr_dict=self[original_head][j])
+            except:
+                print(self.get_sentence_as_string(True))
 
         #the new O node,
         newsent.add_node(n+1,attr_dict=attr_dict)
