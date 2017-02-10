@@ -24,16 +24,16 @@ VERBALPOS = "AUX VERB".split()
 catalanverbclitic_forms = "'hi 'ho 'l 'ls 'm 'n 'ns 's -hi -ho -l -la -les -li -lo -los -m -me -ne -nos -s -s' -se -te".split()
 
 """
-1	la	él	PRON	PRON	Case=Acc|Gender=Fem|Number=Sing|Person=3|PronType=Prs	_	dobj	_	_
-1	las	él	PRON	PRON	Case=Acc|Gender=Fem|Number=Plur|Person=3|PronType=Prs	22	dobj	_	_
-1	lo	él	PRON	PRON	Case=Acc|Gender=Masc|Number=Sing|Person=3|PronType=Prs	11	dobj	_	_
-1	los	él	PRON	PRON	Case=Acc|Gender=Masc|Number=Plur|Person=3|PronType=Prs	23	dobj	_	_
+1	la	él	PRON	PRON	Case=Acc|Gender=Fem|Number=Sing|Person=3|PronType=Prs	_	obj	_	_
+1	las	él	PRON	PRON	Case=Acc|Gender=Fem|Number=Plur|Person=3|PronType=Prs	22	obj	_	_
+1	lo	él	PRON	PRON	Case=Acc|Gender=Masc|Number=Sing|Person=3|PronType=Prs	11	obj	_	_
+1	los	él	PRON	PRON	Case=Acc|Gender=Masc|Number=Plur|Person=3|PronType=Prs	23	obj	_	_
 19	le	él	PRON	PRON	Case=Dat|Number=Sing|Person=3|PronType=Prs	20	iobj	_	_
 4	se	él	PRON	PRON	Person=3	5	iobj/dobj	_	_
-9	nos	yo	PRON	PRON	Number=Plur|Person=1|PronType=Prs	10	iobj/dobj	_	_
-3	te	tú	PRON	PRON	Number=Sing|Person=2|PronType=Prs	4	iobj/dobj	_	_
+9	nos	yo	PRON	PRON	Number=Plur|Person=1|PronType=Prs	10	iobj/obj	_	_
+3	te	tú	PRON	PRON	Number=Sing|Person=2|PronType=Prs	4	iobj/obj	_	_
 17	os	tú	PRON	PRON	Number=Plur|Person=2|PronType=Prs	18	iobj	_	_
-2	me	yo	PRON	PRON	Number=Sing|Person=1|PronType=Prs	3	iobj/dobj	_	_
+2	me	yo	PRON	PRON	Number=Sing|Person=1|PronType=Prs	3	iobj/obj	_	_
 
 """
 cliticfeatures={}
@@ -64,6 +64,31 @@ def remove_elliptic_subjects(sent):
   return newsent
 
 
+def arrange_matarte(sent):
+    newsent = copy.copy(sent)
+    for x in  newsent.graph["comment"]:
+        if "matarte" in x:
+            matartestart =[i for i in newsent.nodes()[1:] if newsent.node[i]["form"]=="'matarte'"][0]
+            head_of_matarte = newsent.head_of(matartestart)
+            newsent = copy.copy(newsent.sentence_plus_word(matartestart,{'form': 'matar', 'cpostag': 'VERB', 'lemma': 'matar', 'feats': "VerbForm=Inf"},
+                                                           head_of_matarte, {'deprel': 'conj'}))
+            newsent = copy.copy(newsent.sentence_plus_word(matartestart+1,{'form': 'te', 'cpostag': 'PRON', 'lemma': 'tú', 'feats': "Number=Sing|Person=2|PronType=Prs"},
+                                                   matartestart+1, {'deprel': 'obj'}))
+            newsent = copy.copy(newsent.sentence_plus_word(matartestart+2,{'form': "'", 'cpostag': 'PUNCT', 'lemma': "'", 'feats': "PunctType=Quot"},
+                                                   matartestart+1, {'deprel': 'punct'}))
+
+
+            newsent.node[matartestart]={id: matartestart, 'misc':"_", 'form': "'", 'cpostag': 'PUNCT', 'lemma': "'", 'feats': "PunctType=Quot"}
+            newsent.remove_edge(head_of_matarte,matartestart)
+            newsent.add_edge(matartestart+1,matartestart,{'deprel':'punct'})
+            newsent.graph['multi_tokens'][matartestart]={'id':[matartestart,matartestart+3],'form':"'matarte'",'misc':spaceafterno }
+
+
+
+
+    return newsent
+
+
 def insert_text_metafield(sent):
     #for each position, check whether there is a SpaceAfter=No, and add a space accordingling
 
@@ -92,10 +117,8 @@ def insert_text_metafield(sent):
                     visited.add(x)
                     wordarray.append(sent.node[x]['form'])
 
-            if 'misc' in sent.node[mwe_end].keys() and spaceafterno in sent.node[mwe_end]['misc']:
-                    sent.node[mwe_end]['misc'] = "_"
-                    sent.graph['multi_tokens'][n]["misc"]=spaceafterno
-                    spacearray[mwe_begin-1]=""
+            if 'misc' in sent.graph['multi_tokens'][n].keys() and spaceafterno in sent.graph['multi_tokens'][n]['misc']:
+                spacearray[mwe_begin-1]=""
         else:
             if n not in visited:
                 if sent.node[n]["form"]:
@@ -118,7 +141,7 @@ def insert_text_metafield(sent):
 
 def verb_has_object(sent,verbindex):
     for h,d in sent.edges():
-        if h == verbindex and sent[h][d]["deprel"] == "dobj":
+        if h == verbindex and sent[h][d]["deprel"] == "obj":
             return True
     return False
 
@@ -200,6 +223,24 @@ def add_mwe_to_tree(sent,mwe_id,mw_form,mw_lemma,mw_cpos):
     return newsent
 
 
+def propagate_clitic_attachment_from_aux_to_verb(sent):
+
+    auxpron_edges={}
+    auxiliaryrelations=['aux','cop']
+
+    newsent = copy.copy(sent)
+
+    for h,d in newsent.edges():
+        if h != 0:
+            head_of_h = newsent.head_of(h)
+            if newsent.node[h]["cpostag"]=="AUX"  and newsent.node[d]["cpostag"]=="PRON" and newsent[head_of_h][h]['deprel'] in auxiliaryrelations:
+                auxpron_edges[d]={'deprel':newsent[h][d]['deprel'],'oldhead':h, 'newhead':head_of_h}
+
+    for d in auxpron_edges.keys():
+        newsent.remove_edge(auxpron_edges[d]['oldhead'],d)
+        newsent.add_edge(auxpron_edges[d]['newhead'],d,{'deprel':auxpron_edges[d]['deprel']})
+    return newsent
+
 
 def remove_longpos(sent):
     newsent = copy.copy(sent)
@@ -210,7 +251,7 @@ def remove_longpos(sent):
 
 def split_adpdet_contractions(sent):
 
-    contraction_prep={'al': 'a', 'del':'de','pel':'per'}
+    contraction_prep={'al': 'a', 'Al' : 'a', 'del':'de','pel':'per'}
 
     newsent = copy.copy(sent)
 
@@ -233,7 +274,7 @@ def split_adpdet_contractions(sent):
             newsent = copy.copy(newsent.sentence_plus_word(current_contraction_index,{'form':'***','cpostag':'***', 'lemma':'***','feats':"_"},newsent.head_of(current_contraction_index),{'deprel':label}))
 
         newsent.node[current_contraction_index]['form']=contraction_prep[newsent.node[current_contraction_index]['lemma']]
-        newsent.node[current_contraction_index]['form']=contraction_prep[newsent.node[current_contraction_index]['lemma']]
+        #newsent.node[current_contraction_index]['form']=contraction_prep[newsent.node[current_contraction_index]['form']]
         newsent.node[current_contraction_index]['lemma']=contraction_prep[newsent.node[current_contraction_index]['lemma']]
         newsent.node[current_contraction_index]['cpostag']='ADP'
         newsent.node[current_contraction_index]['feats']='AdpType=Prep'
@@ -288,7 +329,7 @@ def process_mwe_verbs(sent):
             secondclitic = doublecliticverbs[newsent.node[current_verb]['form']][1]
             newsent.graph['multi_tokens'][current_verb]= {'id':(current_verb,current_verb+1),'form':newsent.node[current_verb]['form']}
             newsent = copy.copy(newsent.sentence_plus_word(current_verb,{'form':firstclitic,'cpostag':"PRON", 'postag':"PRON",'lemma':cliticlemmas[firstclitic.lower()],'feats':cliticfeatures[firstclitic]},current_verb,{'deprel':'iobj'}))
-            newsent = copy.copy(newsent.sentence_plus_word(current_verb,{'form':secondclitic,'cpostag':"PRON", 'postag':"PRON",'lemma':cliticlemmas[secondclitic.lower()],'feats':cliticfeatures[secondclitic]},current_verb,{'deprel':'dobj'}))
+            newsent = copy.copy(newsent.sentence_plus_word(current_verb,{'form':secondclitic,'cpostag':"PRON", 'postag':"PRON",'lemma':cliticlemmas[secondclitic.lower()],'feats':cliticfeatures[secondclitic]},current_verb,{'deprel':'obj'}))
             newsent.node[current_verb]['form']=verbform
         else:
             verbform = doublecliticverbs[newsent.node[current_verb]['form']][0]
@@ -307,11 +348,11 @@ def process_mwe_verbs(sent):
         clitic =  newsent.node[current_verb]["form"][-3:]
 
         if clitic not in doublecaseclitics:
-            cliticlabel = "dobj"
+            cliticlabel = "obj"
         elif verb_has_dobj:
             cliticlabel = "iobj"
         else:
-            cliticlabel = "dobj"
+            cliticlabel = "obj"
 
         newsent.graph['multi_tokens'][current_verb]= {'id':(current_verb,current_verb+1),'form':newsent.node[current_verb]['form']}
         newsent = copy.copy(newsent.sentence_plus_word(current_verb,{'form':clitic,'cpostag':"PRON", 'postag':"PRON",'lemma':cliticlemmas[clitic.lower()],'feats':cliticfeatures[clitic]},current_verb,{'deprel':cliticlabel}))
@@ -319,6 +360,14 @@ def process_mwe_verbs(sent):
         verbs_3hclitic=[i for i in newsent.nodes()[1:] if ("Mood=Imp" in newsent.node[i]['feats'] or "VerbForm=Ger" in newsent.node[i]['feats'] or "VerbForm=Inf" in newsent.node[i]['feats']) and (newsent.node[i]['cpostag'] == "VERB" or newsent.node[i]['cpostag'] == "AUX") and newsent.node[i]['form'][-3:] in threecharclitics and newsent.node[i]['form'] not in exclusion_list_verbs_es]
 
     verbs_2chclitic=[i for i in newsent.nodes()[1:] if ("Mood=Imp" in newsent.node[i]['feats'] or "VerbForm=Ger" in newsent.node[i]['feats'] or "VerbForm=Inf" in newsent.node[i]['feats']) and (newsent.node[i]['cpostag'] == "VERB" or newsent.node[i]['cpostag'] == "AUX") and newsent.node[i]['form'][-2:] in twocharclitics and newsent.node[i]['form'] not in exclusion_list_verbs_es]
+
+    inclusionlist_2ch = ["utilizaros","Atrevéos"]
+
+
+    #inclusionverbs = [i for i in newsent.nodes()[1:] if newsent.node[i]['form'] in inclusionlist_2ch]
+    #verbs_2chclitic.extend(inclusionverbs)
+    #print(inclusionverbs)
+
     while verbs_2chclitic:
         current_verb=verbs_2chclitic[0]
         verb_has_dobj = verb_has_object(newsent,current_verb)
@@ -326,16 +375,22 @@ def process_mwe_verbs(sent):
         clitic =  newsent.node[current_verb]["form"][-2:]
 
         if clitic not in doublecaseclitics:
-            cliticlabel = "dobj"
+            cliticlabel = "obj"
         elif verb_has_dobj:
             cliticlabel = "iobj"
         else:
-            cliticlabel = "dobj"
+            cliticlabel = "obj"
 
         newsent.graph['multi_tokens'][current_verb]= {'id':(current_verb,current_verb+1),'form':newsent.node[current_verb]['form']}
         newsent = copy.copy(newsent.sentence_plus_word(current_verb,{'form':clitic,'cpostag':"PRON",'postag':"PRON", 'lemma':cliticlemmas[clitic.lower()],'feats':cliticfeatures[clitic]},current_verb,{'deprel':cliticlabel}))
         newsent.node[current_verb]['form']=newform
         verbs_2chclitic=[i for i in newsent.nodes()[1:] if ("Mood=Imp" in newsent.node[i]['feats'] or "VerbForm=Ger" in newsent.node[i]['feats'] or "VerbForm=Inf" in newsent.node[i]['feats']) and (newsent.node[i]['cpostag'] == "VERB" or newsent.node[i]['cpostag'] == "AUX") and newsent.node[i]['form'][-2:] in twocharclitics and newsent.node[i]['form'] not in exclusion_list_verbs_es]
+        inclusionverbs = [i for i in newsent.nodes()[1:] if newsent.node[i]['form'] in inclusionlist_2ch]
+        verbs_2chclitic.extend(inclusionverbs)
+
+
+
+
     return newsent
 
 
@@ -369,16 +424,39 @@ def normalize_clitics_ca(sent):
     return sent
 
 
+def arrange_nospace_multiwords(sent):
+    newsent = copy.copy(sent)
+    for n in newsent.graph['multi_tokens']:
+        mwe_begin, mwe_end = newsent.graph['multi_tokens'][n]["id"]
+        for x in range(mwe_begin,mwe_end+1):
+            if 'misc' in newsent.node[x].keys() and spaceafterno in newsent.node[x]['misc']:
+                newsent.node[x]['misc'] = "_"
+                newsent.graph['multi_tokens'][n]["misc"] = spaceafterno
+
+    return newsent
+
+
+def dobj_to_obj(sent):
+    for h,d in sent.edges():
+        if sent[h][d]["deprel"] == "dobj":
+            sent[h][d]["deprel"] = "obj"
+    return sent
+
 def apply_transform(sent,lang):
 
     newsent = copy.copy(sent)
-    newsent = copy.copy(split_adpdet_contractions(newsent))
+    newsent = dobj_to_obj(sent)
+    #newsent = copy.copy(split_adpdet_contractions(newsent))
     if lang == "es":
+        pass
         newsent = copy.copy(process_mwe_verbs(newsent))
     else:
         newsent = copy.copy(insert_multitoken_verbs_ca(newsent))
 
+    newsent = arrange_matarte(newsent)
+    newsent = arrange_nospace_multiwords(newsent)
     newsent = insert_text_metafield(newsent)
+    newsent = propagate_clitic_attachment_from_aux_to_verb(newsent)
 
     if lang == "ca":
         newsent = normalize_clitics_ca(newsent)
@@ -391,9 +469,9 @@ def apply_transform(sent,lang):
 def main():
     parser = argparse.ArgumentParser(description="""Convert conllu to conll format""")
     #parser.add_argument('--input', help="conllu file", default='../..//UD_Spanish-AnCora/es_ancora-all.conllu')
-    parser.add_argument('--input', help="conllu file", default='../data/v2/UD_Catalan/ca-ud-dev.conllu')
-    parser.add_argument('--output', help="target file", type=Path,default="catout.conllu")
-    parser.add_argument('--lang', help="specify a language 2-letter code", default="ca")
+    parser.add_argument('--input', help="conllu file", default='../data/v2/UD_Spanish-Ancora/es_ancora-ud-train.conllu')
+    parser.add_argument('--output', help="target file", type=Path,default="es_train_out.conllu")
+    parser.add_argument('--lang', help="specify a language 2-letter code", default="es")
     args = parser.parse_args()
 
     if sys.version_info < (3,0):
